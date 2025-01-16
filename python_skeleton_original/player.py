@@ -78,37 +78,6 @@ class Player(Bot):
         if opponent_bounty_hit:
             print("Opponent hit their bounty of " + opponent_bounty_rank + "!")
 
-    def calculate_strength(self, my_cards, board_cards):
-        print(f"my cards: {my_cards}")
-        print(f"board card: {board_cards}")
-        MC_ITER = 100
-        my_cards = [eval7.Card(card) for card in my_cards]
-        board_cards = [eval7.Card(card) for card in board_cards]
-        deck = eval7.Deck()
-        for card in my_cards + board_cards:
-            deck.cards.remove(card)
-        
-        score = 0
-        for _ in range(MC_ITER):
-            deck.shuffle()
-            draw_number = 2 + (5 - len(board_cards))
-            draw = deck.peek(draw_number)
-            opp_draw = draw[:2]
-            board_draw = draw[2:]
-            my_hand = my_cards + board_cards + board_draw
-            opp_hand = opp_draw + board_cards + board_draw
-            my_value = eval7.evaluate(my_hand)
-            opp_value = eval7.evaluate(opp_hand)
-            if my_value > opp_value:
-                score += 1
-            elif my_value < opp_value:
-                score += 0
-            else:
-                score += 0.5
-        
-        win_rate = score / MC_ITER
-        print(f"win rate: {win_rate}")
-        return win_rate
 
     def get_action(self, game_state, round_state, active):
         '''
@@ -141,20 +110,12 @@ class Player(Bot):
            min_raise, max_raise = round_state.raise_bounds()  # the smallest and largest numbers of chips for a legal bet/raise
            min_cost = min_raise - my_pip  # the cost of a minimum bet/raise
            max_cost = max_raise - my_pip  # the cost of a maximum bet/raise
-        win_rate = self.calculate_strength(my_cards, board_cards)
-        pot_odds = continue_cost / (my_pip + opp_pip + continue_cost + 0.1) # min probability of winning a hand to justify calling
-        if my_bounty in my_cards or my_bounty in board_cards:
-            pot_odds = continue_cost / (my_pip + opp_pip * 1.5 + continue_cost + 0.1)
         if RaiseAction in legal_actions:
-            if win_rate > 0.90 and win_rate > pot_odds:
-                return RaiseAction(max_raise)
-            if win_rate > 0.60 and win_rate > pot_odds:
-                return RaiseAction(min_raise + int((max_raise-min_raise) * (win_rate - 0.5)))
+            if random.random() < 0.5:
+                return RaiseAction(min_raise)
         if CheckAction in legal_actions:  # check-call
             return CheckAction()
-        if win_rate < 0.30:
-            return FoldAction()
-        if win_rate < .25 * pot_odds:
+        if random.random() < 0.25:
             return FoldAction()
         return CallAction()
 
