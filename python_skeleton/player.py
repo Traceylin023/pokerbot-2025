@@ -26,6 +26,9 @@ class Player(Bot):
         Returns:
         Nothing.
         '''
+
+        opponent_bounty = []
+        
         pass
 
     def handle_new_round(self, game_state, round_state, active):
@@ -46,7 +49,19 @@ class Player(Bot):
         my_cards = round_state.hands[active]  # your cards
         big_blind = bool(active)  # True if you are the big blind
         my_bounty = round_state.bounties[active]  # your current bounty rank
+
+        if round_num % 25 == 1:
+            self.opponent_bounty = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"]
+
+        print(f"round {round_num}")
+        print(f"possible opponent bounty: {self.opponent_bounty}")
         pass
+
+    def convert_to_rank(hand):
+        rank = []
+        for x in hand:
+            rank.append(int(x[:1]))
+        return rank
 
     def handle_round_over(self, game_state, terminal_state, active):
         '''
@@ -65,6 +80,10 @@ class Player(Bot):
         street = previous_state.street  # 0, 3, 4, or 5 representing when this round ended
         my_cards = previous_state.hands[active]  # your cards
         opp_cards = previous_state.hands[1-active]  # opponent's cards or [] if not revealed
+        board_cards = previous_state.deck[:street]  # the board cards
+        my_pip = previous_state.pips[active]  # the number of chips you have contributed to the pot this round of betting
+        opp_pip = previous_state.pips[1-active]  # the number of chips your opponent has contributed to the pot this round of betting
+        continue_cost = opp_pip - my_pip  # the number of chips needed to stay in the pot
         
         my_bounty_hit = terminal_state.bounty_hits[active]  # True if you hit bounty
         opponent_bounty_hit = terminal_state.bounty_hits[1-active] # True if opponent hit bounty
@@ -77,6 +96,24 @@ class Player(Bot):
             print("I hit my bounty of " + bounty_rank + "!")
         if opponent_bounty_hit:
             print("Opponent hit their bounty of " + opponent_bounty_rank + "!")
+            community_cards = board_cards
+            if len(opp_cards) != 0:
+                community_cards += opp_cards
+                community_cards = [card[0] for card in community_cards]
+                # print(f"community cards: {community_cards}")
+                # print(f"opponent bounty: {self.opponent_bounty}")
+                for x in self.opponent_bounty:
+                    if x not in community_cards:
+                        self.opponent_bounty.remove(x)
+        elif my_delta < 0:
+            community_cards = board_cards
+            if len(opp_cards) != 0:
+                community_cards += opp_cards
+            community_cards = [card[0] for card in community_cards]
+            for x in self.opponent_bounty:
+                if x in community_cards:
+                    self.opponent_bounty.remove(x)
+
 
     def calculate_strength(self, my_cards, board_cards):
         print(f"my cards: {my_cards}")
@@ -136,6 +173,9 @@ class Player(Bot):
         my_contribution = STARTING_STACK - my_stack  # the number of chips you have contributed to the pot
         opp_contribution = STARTING_STACK - opp_stack  # the number of chips your opponent has contributed to the pot
 
+        if len(self.opponent_bounty) == 1 and (self.opponent_bounty[0] in [card[0] for card in my_cards] or self.opponent_bounty[0] in [card[0] for card in board_cards]):
+            continue_cost *= 1.5
+            my_pip *= 1.5
         
         if RaiseAction in legal_actions:
            min_raise, max_raise = round_state.raise_bounds()  # the smallest and largest numbers of chips for a legal bet/raise
@@ -143,19 +183,55 @@ class Player(Bot):
            max_cost = max_raise - my_pip  # the cost of a maximum bet/raise
         win_rate = self.calculate_strength(my_cards, board_cards)
         pot_odds = continue_cost / (my_pip + opp_pip + continue_cost + 0.1) # min probability of winning a hand to justify calling
-        if my_bounty in my_cards or my_bounty in board_cards:
+        rounds_left = 1
+        if street == 0:
+            rounds_left = 4
+        if street == 3:
+            rounds_left = 3
+        if street == 4:
+            rounds_left = 2
+        if street == 5:
+            rounds_left = 1
+        if my_bounty in [card[0] for card in my_cards] or my_bounty in [card[0] for card in board_cards]:
             pot_odds = continue_cost / (my_pip + opp_pip * 1.5 + continue_cost + 0.1)
+        print(f"pot odd: {pot_odds}")
+        if continue_cost > 0 and win_rate < 0.5:
+            print("folded for continuation cost")
+            return FoldAction()
+        if continue_cost > 50 and win_rate < 0.65:
+            print("folded for 50")
+            return FoldAction()
+        if continue_cost > 100 and win_rate < 0.75:
+            print("folded for 100")
+            return FoldAction()
+        if continue_cost > 200 and win_rate < 0.85:
+            print("folded for 200")
+            return FoldAction()
         if RaiseAction in legal_actions:
-            if win_rate > 0.90 and win_rate > pot_odds:
-                return RaiseAction(max_raise)
-            if win_rate > 0.60 and win_rate > pot_odds:
-                return RaiseAction(min_raise + int((max_raise-min_raise) * (win_rate - 0.5)))
+            if continue_cost == 0 and street == 0 and (my_bounty in [card[0] for card in my_cards] or my_bounty in [card[0] for card in board_cards]):
+                print(f"bounty hit: {my_bounty} in {my_cards} or {board_cards}")
+                print(f"raised by min: {min_raise}")
+                return RaiseAction(min_raise)
+            if continue_cost == 0 and street == 3 and (my_pip + opp_pip) < 50 and (my_bounty in [card[0] for card in my_cards] or my_bounty in [card[0] for card in board_cards]):
+                print(f"bounty hit: {my_bounty} in {my_cards} or {board_cards}")
+                print(f"raised by min: {min_raise}")
+                return RaiseAction(min_raise)
+            if win_rate > 0.95 and win_rate > pot_odds:
+                print(f"raised by max: {int(max_raise/rounds_left**2)}")
+                return RaiseAction(int(max_raise/rounds_left**2))
+            if win_rate > 0.75 and win_rate > pot_odds:
+                print(f"raised by: {max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7)))}")
+                return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7))))
         if CheckAction in legal_actions:  # check-call
+            print("checked")
             return CheckAction()
-        if win_rate < 0.30:
+        if win_rate < 0.4:
+            print("folded bc win rate")
             return FoldAction()
         if win_rate < .25 * pot_odds:
+            print("folded bc of pot odd")
             return FoldAction()
+        print("called")
         return CallAction()
 
 
