@@ -151,6 +151,8 @@ class Player(Bot):
         # print(f"board strength b4: {board_strength}")
         board_strength /= MC_ITER
         win_rate = score / MC_ITER
+        if len(board_cards) == 0:
+            board_strength = .1
         print(f"win rate: {win_rate}")
         print(f"board strength: {board_strength}")
         return win_rate, board_strength
@@ -258,13 +260,13 @@ class Player(Bot):
             if win_rate > 0.8 and win_rate > pot_odds:
                 if board_type == "Dry":
                     print("Dry")
-                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.5)))
+                    return RaiseAction(min(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.3)), 100))
                 elif board_type == "Wet":
                     print("Wet")
-                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7) * 0.8)))
+                    return RaiseAction(min(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7) * 0.6)), 100))
                 elif board_type == "Very Wet":
                     print("Very Wet")
-                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.5)))
+                    return RaiseAction(min(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.3)), 100))
         if CheckAction in legal_actions:  # check-call
             print("checked")
             return CheckAction()
