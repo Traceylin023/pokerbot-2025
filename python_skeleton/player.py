@@ -255,16 +255,16 @@ class Player(Bot):
             if win_rate > 0.95 and win_rate > pot_odds:
                 print(f"raised by max: {int(max_raise/rounds_left**2)}")
                 return RaiseAction(int(max_raise/rounds_left**2))
-            if win_rate > 0.75 and win_rate > pot_odds:
+            if win_rate > 0.8 and win_rate > pot_odds:
                 if board_type == "Dry":
                     print("Dry")
-                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.8)))
+                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.5)))
                 elif board_type == "Wet":
                     print("Wet")
-                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7))))
+                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7) * 0.8)))
                 elif board_type == "Very Wet":
                     print("Very Wet")
-                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.8)))
+                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.5)))
         if CheckAction in legal_actions:  # check-call
             print("checked")
             return CheckAction()
