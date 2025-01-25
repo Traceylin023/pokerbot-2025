@@ -116,8 +116,8 @@ class Player(Bot):
 
 
     def calculate_strength(self, my_cards, board_cards):
-        print(f"my cards: {my_cards}")
-        print(f"board card: {board_cards}")
+        # print(f"my cards: {my_cards}")
+        # print(f"board card: {board_cards}")
         MC_ITER = 100
         my_cards = [eval7.Card(card) for card in my_cards]
         board_cards = [eval7.Card(card) for card in board_cards]
@@ -126,6 +126,7 @@ class Player(Bot):
             deck.cards.remove(card)
         
         score = 0
+        board_strength = 0
         for _ in range(MC_ITER):
             deck.shuffle()
             draw_number = 2 + (5 - len(board_cards))
@@ -142,10 +143,19 @@ class Player(Bot):
                 score += 0
             else:
                 score += 0.5
+            
+            # board type
+            possible_hands = eval7.handtype(eval7.evaluate(opp_hand))
+            # print(f"possible hands: {possible_hands}")
+            if possible_hands != "High Card" and possible_hands != "Pair" and possible_hands != "Two Pair" and possible_hands != "Trips":
+                board_strength += 1
         
+        # print(f"board strength b4: {board_strength}")
+        board_strength /= MC_ITER
         win_rate = score / MC_ITER
         print(f"win rate: {win_rate}")
-        return win_rate
+        print(f"board strength: {board_strength}")
+        return win_rate, board_strength
 
     def get_action(self, game_state, round_state, active):
         '''
@@ -181,7 +191,16 @@ class Player(Bot):
            min_raise, max_raise = round_state.raise_bounds()  # the smallest and largest numbers of chips for a legal bet/raise
            min_cost = min_raise - my_pip  # the cost of a minimum bet/raise
            max_cost = max_raise - my_pip  # the cost of a maximum bet/raise
-        win_rate = self.calculate_strength(my_cards, board_cards)
+
+        # below 10 is dry (raise low), 10 - 15 is wet (raise a little high), above 15 is very wet (raise low)
+        win_rate, board_strength = self.calculate_strength(my_cards, board_cards)
+        board_type = ""
+        if board_strength < 0.1:
+            board_type = "Dry"
+        elif board_strength < 0.15:
+            board_type = "Wet"
+        else:
+            board_type = "Very Wet"
         pot_odds = continue_cost / (my_pip + opp_pip + continue_cost + 0.1) # min probability of winning a hand to justify calling
         rounds_left = 1
         if street == 0:
@@ -195,18 +214,21 @@ class Player(Bot):
         if my_bounty in [card[0] for card in my_cards] or my_bounty in [card[0] for card in board_cards]:
             pot_odds = continue_cost / (my_pip + opp_pip * 1.5 + continue_cost + 0.1)
         print(f"pot odd: {pot_odds}")
-        if continue_cost > 0 and win_rate < 0.5:
-            print("folded for continuation cost")
-            return FoldAction()
-        if continue_cost > 50 and win_rate < 0.65:
-            print("folded for 50")
-            return FoldAction()
-        if continue_cost > 100 and win_rate < 0.75:
-            print("folded for 100")
-            return FoldAction()
-        if continue_cost > 200 and win_rate < 0.85:
-            print("folded for 200")
-            return FoldAction()
+        # if continue_cost > 0 and win_rate < 0.5:
+        #     print("folded for continuation cost")
+        #     return FoldAction()
+        if continue_cost > 20 and (win_rate < 0.6 or board_type == "Very Wet" or board_strength > 0.12):
+            if win_rate < 0.9:
+                print("folded for 20")
+                return FoldAction()
+        if continue_cost > 70 and (win_rate < 0.75 or board_type == "Very Wet"):
+            if win_rate < 0.95:
+                print("folded for 70")
+                return FoldAction()
+        if continue_cost > 150 and (win_rate < 0.85 or board_type == "Very Wet"):
+            if win_rate < 0.95:
+                print("folded for 150")
+                return FoldAction()
         if RaiseAction in legal_actions:
             if continue_cost == 0 and street == 0 and (my_bounty in [card[0] for card in my_cards] or my_bounty in [card[0] for card in board_cards]):
                 print(f"bounty hit: {my_bounty} in {my_cards} or {board_cards}")
@@ -220,12 +242,22 @@ class Player(Bot):
                 print(f"raised by max: {int(max_raise/rounds_left**2)}")
                 return RaiseAction(int(max_raise/rounds_left**2))
             if win_rate > 0.75 and win_rate > pot_odds:
-                print(f"raised by: {max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7)))}")
-                return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7))))
+                if board_type == "Dry":
+                    print("Dry")
+                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.8)))
+                elif board_type == "Wet":
+                    print("Wet")
+                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.7))))
+                elif board_type == "Very Wet":
+                    print("Very Wet")
+                    return RaiseAction(max(min_raise, int((max_raise-min_raise) * (win_rate - 0.75) * 0.8)))
         if CheckAction in legal_actions:  # check-call
             print("checked")
             return CheckAction()
-        if win_rate < 0.4:
+        if board_type == "Very Wet" and win_rate < 0.65:
+            print("Very Wet")
+            return FoldAction()
+        if win_rate < 0.45:
             print("folded bc win rate")
             return FoldAction()
         if win_rate < .25 * pot_odds:
