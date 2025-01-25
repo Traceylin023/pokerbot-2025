@@ -28,6 +28,8 @@ class Player(Bot):
         '''
 
         opponent_bounty = []
+        opp_raise = 0
+        last_round = 0
         
         pass
 
@@ -49,6 +51,8 @@ class Player(Bot):
         my_cards = round_state.hands[active]  # your cards
         big_blind = bool(active)  # True if you are the big blind
         my_bounty = round_state.bounties[active]  # your current bounty rank
+        self.opp_raise = 0
+        self.last_round = 0
 
         if round_num % 25 == 1:
             self.opponent_bounty = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"]
@@ -56,12 +60,6 @@ class Player(Bot):
         print(f"round {round_num}")
         print(f"possible opponent bounty: {self.opponent_bounty}")
         pass
-
-    def convert_to_rank(hand):
-        rank = []
-        for x in hand:
-            rank.append(int(x[:1]))
-        return rank
 
     def handle_round_over(self, game_state, terminal_state, active):
         '''
@@ -186,6 +184,19 @@ class Player(Bot):
         if len(self.opponent_bounty) == 1 and (self.opponent_bounty[0] in [card[0] for card in my_cards] or self.opponent_bounty[0] in [card[0] for card in board_cards]):
             continue_cost *= 1.5
             my_pip *= 1.5
+
+        reraised = False
+        print(f"last round: {self.last_round} street: {street} continue cost: {continue_cost}")
+        if self.last_round != street:
+            self.opp_raise = continue_cost
+        else:
+            self.opp_raise += continue_cost
+            if continue_cost > 0:
+                reraised == True
+
+        print(f"reraised: {reraised}")
+
+        self.last_round = street
         
         if RaiseAction in legal_actions:
            min_raise, max_raise = round_state.raise_bounds()  # the smallest and largest numbers of chips for a legal bet/raise
@@ -214,10 +225,13 @@ class Player(Bot):
         if my_bounty in [card[0] for card in my_cards] or my_bounty in [card[0] for card in board_cards]:
             pot_odds = continue_cost / (my_pip + opp_pip * 1.5 + continue_cost + 0.1)
         print(f"pot odd: {pot_odds}")
-        # if continue_cost > 0 and win_rate < 0.5:
-        #     print("folded for continuation cost")
+        # if reraised and (win_rate < 0.6 or board_strength > .12):
+        #     print(f"folded because of reraise")
         #     return FoldAction()
-        if continue_cost > 20 and (win_rate < 0.6 or board_type == "Very Wet" or board_strength > 0.12):
+        if continue_cost > 0 and win_rate < 0.5 and board_strength > 0.1:
+            print("folded for continuation cost")
+            return FoldAction()
+        if continue_cost > 20 and (win_rate < 0.6 or board_strength > 0.12):
             if win_rate < 0.9:
                 print("folded for 20")
                 return FoldAction()
